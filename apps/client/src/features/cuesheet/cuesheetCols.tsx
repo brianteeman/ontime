@@ -49,7 +49,7 @@ function MakeCustomField({ row, column, table }: CellContext<OntimeRundownEntry,
   }
 
   // events dont necessarily contain all custom fields
-  const initialValue = event.custom[column.id]?.value ?? '';
+  const initialValue = event.custom[column.id] ?? '';
 
   return <EditableCell value={initialValue} handleUpdate={update} />;
 }
@@ -117,5 +117,3 @@ export function makeCuesheetColumns(customFields: CustomFields): ColumnDef<Ontim
     ...dynamicCustomFields,
   ];
 }
-
-export const initialColumnOrder: string[] = makeCuesheetColumns({}).map((column) => column.id as string);

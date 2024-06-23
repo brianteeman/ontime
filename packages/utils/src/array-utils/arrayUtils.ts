@@ -34,6 +34,12 @@ export function deleteAtIndex<T>(index: number, array: T[]) {
   return array.filter((_, i) => i !== index);
 }
 
+/**
+ * Reorders two objects in an array
+ * @param array
+ * @param fromIndex
+ * @param toIndex
+ */
 export function reorderArray<T>(array: T[], fromIndex: number, toIndex: number) {
   if (fromIndex === toIndex) {
     return array; // No change needed, return the original array
@@ -48,18 +54,3 @@ export function reorderArray<T>(array: T[], fromIndex: number, toIndex: number) 
   modifiedArray.splice(toIndex, 0, reorderedItem);
   return modifiedArray;
 }
-
-/**
- * @description Sorts an array of objects by given property
- * @param {array} arr - array to be sorted
- * @param {string} property - property to compare
- * @returns {array} copy of array sorted in ascending order
- */
-
-export const sortArrayByProperty = <T>(arr: T[], property: string): T[] => {
-  return [...arr].sort((a, b) => {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore -- its ok
-    return a[property] - b[property];
-  });
-};

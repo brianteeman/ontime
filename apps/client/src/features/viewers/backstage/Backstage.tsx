@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CustomFields, Message, OntimeEvent, ProjectData, Settings, SupportedEvent, ViewSettings } from 'ontime-types';
+import { CustomFields, OntimeEvent, ProjectData, Settings, SupportedEvent, ViewSettings } from 'ontime-types';
 import { millisToString, removeLeadingZero } from 'ontime-utils';
 
 import { overrideStylesURL } from '../../../common/api/constants';
@@ -25,10 +25,11 @@ import { getPropertyValue } from '../common/viewUtils';
 
 import './Backstage.scss';
 
+export const MotionTitleCard = motion(TitleCard);
+
 interface BackstageProps {
   customFields: CustomFields;
   isMirrored: boolean;
-  publ: Message;
   eventNow: OntimeEvent | null;
   eventNext: OntimeEvent | null;
   time: ViewExtendedTimer;
@@ -43,7 +44,6 @@ export default function Backstage(props: BackstageProps) {
   const {
     customFields,
     isMirrored,
-    publ,
     eventNow,
     eventNext,
     time,
@@ -84,7 +84,6 @@ export default function Backstage(props: BackstageProps) {
 
   const qrSize = Math.max(window.innerWidth / 15, 128);
   const filteredEvents = backstageEvents.filter((event) => event.type === SupportedEvent.Event);
-  const showPublicMessage = publ.text && publ.visible;
   const showProgress = time.playback !== 'stop';
 
   const secondarySource = searchParams.get('secondary-src');
@@ -127,7 +126,7 @@ export default function Backstage(props: BackstageProps) {
               animate='visible'
               exit='exit'
             >
-              <TitleCard label='now' title={eventNow.title} secondary={secondaryTextNow} />
+              <TitleCard title={eventNow.title} secondary={secondaryTextNow} />
               <div className='timer-group'>
                 <div className='aux-timers'>
                   <div className='aux-timers__label'>{getLocalizedString('common.started_at')}</div>
@@ -154,16 +153,17 @@ export default function Backstage(props: BackstageProps) {
 
         <AnimatePresence>
           {eventNext && (
-            <motion.div
+            <MotionTitleCard
               className='event next'
               key='next'
               variants={titleVariants}
               initial='hidden'
               animate='visible'
               exit='exit'
-            >
-              <TitleCard label='next' title={eventNext.title} secondary={secondaryTextNext} />
-            </motion.div>
+              label='next'
+              title={eventNext.title}
+              secondary={secondaryTextNext}
+            />
           )}
         </AnimatePresence>
       </div>
@@ -172,11 +172,6 @@ export default function Backstage(props: BackstageProps) {
         <ScheduleNav className='schedule-nav-container' />
         <Schedule isProduction className='schedule-container' />
       </ScheduleProvider>
-
-      <div className={showPublicMessage ? 'public-container' : 'public-container public-container--hidden'}>
-        <div className='label'>{getLocalizedString('common.public_message')}</div>
-        <div className='message'>{publ.text}</div>
-      </div>
 
       <div className='info'>
         {general.backstageUrl && <QRCode value={general.backstageUrl} size={qrSize} level='L' className='qr' />}

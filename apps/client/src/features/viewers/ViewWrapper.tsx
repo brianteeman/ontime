@@ -30,11 +30,9 @@ type WithDataProps = {
   external: Message;
   general: ProjectData;
   isMirrored: boolean;
-  lower: Message;
   nextId: string | null;
   onAir: boolean;
   pres: TimerMessage;
-  publ: Message;
   publicEventNext: OntimeEvent | null;
   publicEventNow: OntimeEvent | null;
   publicSelectedId: string | null;
@@ -84,8 +82,6 @@ const withData = <P extends WithDataProps>(Component: ComponentType<P>) => {
       ...timer,
       clock,
       timerType: eventNow?.timerType ?? null,
-      timeWarning: eventNow?.timeWarning ?? null,
-      timeDanger: eventNow?.timeWarning ?? null,
     };
 
     // prevent render until we get all the data we need
@@ -106,11 +102,9 @@ const withData = <P extends WithDataProps>(Component: ComponentType<P>) => {
           external={message.external}
           general={project}
           isMirrored={isMirrored}
-          lower={message.lower}
           nextId={nextId}
           onAir={onAir}
           pres={message.timer}
-          publ={message.public}
           publicEventNext={publicEventNext}
           publicEventNow={publicEventNow}
           publicSelectedId={publicSelectedId}

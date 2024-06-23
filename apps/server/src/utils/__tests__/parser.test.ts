@@ -19,6 +19,8 @@ import { dbModel } from '../../models/dataModel.js';
 import { createEvent, getCustomFieldData, parseExcel, parseJson } from '../parser.js';
 import { makeString } from '../parserUtils.js';
 import { parseRundown, parseUrlPresets, parseViewSettings } from '../parserFunctions.js';
+import { ImportMap, MILLIS_PER_MINUTE } from 'ontime-utils';
+import * as cache from '../../services/rundown-service/rundownCache.js';
 
 describe('test json parser with valid def', () => {
   const testData: Partial<DatabaseModel> = {
@@ -643,6 +645,8 @@ describe('test import of v2 datamodel', () => {
           onStop: [],
           onUpdate: [],
           onFinish: [],
+          onWarning: [],
+          onDanger: [],
         },
       },
       http: {
@@ -734,6 +738,7 @@ describe('getCustomFieldData()', () => {
     const importMap = {
       worksheet: 'event schedule',
       timeStart: 'time start',
+      linkStart: 'link start',
       timeEnd: 'time end',
       duration: 'duration',
       cue: 'cue',
@@ -751,7 +756,7 @@ describe('getCustomFieldData()', () => {
         sound: 'sound',
         video: 'av',
       },
-    };
+    } as ImportMap;
 
     const result = getCustomFieldData(importMap);
     expect(result.customFields).toStrictEqual({
@@ -883,16 +888,16 @@ describe('parseExcel()', () => {
         skip: false,
         note: 'Ballyhoo',
         custom: {
-          user0: { value: 'a0' },
-          user1: { value: 'a1' },
-          user2: { value: 'a2' },
-          user3: { value: 'a3' },
-          user4: { value: 'a4' },
-          user5: { value: 'a5' },
-          user6: { value: 'a6' },
-          user7: { value: 'a7' },
-          user8: { value: 'a8' },
-          user9: { value: 'a9' },
+          user0: 'a0',
+          user1: 'a1',
+          user2: 'a2',
+          user3: 'a3',
+          user4: 'a4',
+          user5: 'a5',
+          user6: 'a6',
+          user7: 'a7',
+          user8: 'a8',
+          user9: 'a9',
         },
         colour: 'red',
         type: 'event',
@@ -908,8 +913,8 @@ describe('parseExcel()', () => {
         skip: true,
         note: 'Rainbow chase',
         custom: {
-          user0: { value: 'b0' },
-          user5: { value: 'b5' },
+          user0: 'b0',
+          user5: 'b5',
         },
         colour: '#F00',
         type: 'event',
@@ -1406,5 +1411,237 @@ describe('parseExcel()', () => {
     expect(events.at(5).timeStart).toEqual(35100000);
     expect(events.at(6).timeStart).toEqual(59400000);
     expect(events.at(7).timeStart).toEqual(78300000);
+  });
+
+  it('handle leading and trailing whitespace', () => {
+    const testData = [
+      ['Time Start', 'Time End', ' Title', 'End Action', 'Public', 'Skip', 'Notes', 'Colour ', 'cue'],
+      ['4:30:00', '4:30:00', 'A song from the hearth', 'load-next', 'x', '', 'Rainbow chase', '#F00', 102],
+    ];
+
+    const importMap = {
+      worksheet: 'event schedule',
+      timeStart: ' time start',
+      timeEnd: 'time end ',
+      duration: 'duration',
+      cue: 'cue',
+      title: 'title',
+      isPublic: 'public',
+      skip: 'skip',
+      note: 'notes',
+      colour: 'colour',
+      endAction: 'end action',
+      timerType: 'timer type',
+      timeWarning: 'warning time',
+      timeDanger: 'danger time',
+      custom: {},
+    };
+
+    const result = parseExcel(testData, importMap);
+    const rundown = parseRundown(result);
+    const events = rundown.filter((e) => e.type === SupportedEvent.Event) as OntimeEvent[];
+    expect(events.at(0).timeStart).toEqual(16200000); //<--leading white space in MAP
+    expect(events.at(0).timeEnd).toEqual(16200000); //<--trailing white space in MAP
+    expect(events.at(0).title).toEqual('A song from the hearth'); //<--leading white space in Excel data
+    expect(events.at(0).colour).toEqual('#F00'); //<--trailing white space in Excel data
+  });
+
+  it('link start', () => {
+    const testData = [
+      [
+        'Time Start',
+        'Time End',
+        'Title',
+        'End Action',
+        'Public',
+        'Skip',
+        'Notes',
+        'Colour',
+        'cue',
+        'Link Start',
+        'Timer type',
+      ],
+      ['4:30:00', '9:45:00', 'A', 'load-next', '', '', 'Rainbow chase', '#F00', 102, '', 'count-down'],
+      ['9:45:00', '10:56:00', 'C', 'load-next', 'x', '', 'Rainbow chase', '#0F0', 103, 'x', 'count-down'],
+      ['10:00:00', '16:36:00', 'D', 'load-next', 'x', '', 'Rainbow chase', '#F00', 102, 'x', 'count-down'], //<-- incorrect start times are overridden
+      ['21:45:00', '22:56:00', 'E', 'load-next', 'x', '', 'Rainbow chase', '#0F0', 103, '', 'count-down'],
+      ['', '', 'BLOCK', '', '', '', '', '', '', '', 'block'],
+      ['00:0:00', '23:56:00', 'G', 'load-next', 'x', '', 'Rainbow chase', '#0F0', 103, 'x', 'count-down'], //<-- link past blocks
+      [],
+    ];
+
+    const importMap = {
+      worksheet: 'event schedule',
+      timeStart: 'time start',
+      linkStart: 'link start',
+      timeEnd: 'time end',
+      duration: 'duration',
+      cue: 'cue',
+      title: 'title',
+      isPublic: 'public',
+      skip: 'skip',
+      note: 'notes',
+      colour: 'colour',
+      endAction: 'end action',
+      timerType: 'timer type',
+      timeWarning: 'warning time',
+      timeDanger: 'danger time',
+      custom: {},
+    };
+
+    const result = parseExcel(testData, importMap);
+    const initialRundown = parseRundown(result);
+
+    cache.init(initialRundown, {});
+    const { rundown, order } = cache.get();
+
+    const firstId = order.at(0); // A
+    const secondId = order.at(1); // C
+    const thirdId = order.at(2); // D
+    const fourthId = order.at(3); // E
+    const fifhtId = order.at(4); // Block
+    const sixthId = order.at(5); // G
+
+    expect((rundown[firstId] as OntimeEvent).timeStart).toEqual(16200000);
+
+    expect((rundown[secondId] as OntimeEvent).timeStart).toEqual((rundown[firstId] as OntimeEvent).timeEnd);
+    expect((rundown[secondId] as OntimeEvent).linkStart).toEqual((rundown[firstId] as OntimeEvent).id);
+
+    expect((rundown[thirdId] as OntimeEvent).timeStart).toEqual((rundown[secondId] as OntimeEvent).timeEnd);
+    expect((rundown[thirdId] as OntimeEvent).linkStart).toEqual((rundown[secondId] as OntimeEvent).id);
+
+    expect((rundown[fourthId] as OntimeEvent).timeStart).toEqual(78300000);
+
+    expect((rundown[fifhtId] as OntimeEvent).type).toEqual(SupportedEvent.Block);
+
+    expect((rundown[sixthId] as OntimeEvent).timeStart).toEqual((rundown[fourthId] as OntimeEvent).timeEnd);
+    expect((rundown[sixthId] as OntimeEvent).linkStart).toEqual((rundown[fourthId] as OntimeEvent).id);
+  });
+
+  it('#971 BUG: parses time fields and booleans', () => {
+    const testData = [
+      [
+        'Cue',
+        'Colour',
+        'Time Start',
+        'Time End',
+        'Duration',
+        'Link Start',
+        'Title',
+        'Note',
+        'Timer Type',
+        'End Action',
+        'Warning time',
+        'Danger time',
+        'Public',
+        'Skip',
+      ],
+      [
+        'SETUP',
+        '',
+        '1899-12-30T07:15:00.000Z',
+        '1899-12-30T08:30:00.000Z',
+        '',
+        'false',
+        'Setup',
+        '',
+        'time-to-end',
+        'none',
+        '15',
+        '00:05:00',
+        'FALSE',
+        'TRUE',
+      ],
+      [
+        'MEET1',
+        '#779BE7',
+        '1899-12-30T08:30:00.000Z',
+        '1899-12-30T10:00:00.000Z',
+        '',
+        'false',
+        'Meeting 1',
+        '',
+        'time-to-end',
+        'none',
+        15,
+        '00:05:00',
+        'TRUE',
+        'FALSE',
+      ],
+      [
+        'MEET2',
+        '#779BE7',
+        '1899-12-30T10:00:00.000Z',
+        '',
+        '60',
+        'false',
+        'Meeting 2',
+        '',
+        'time-to-end',
+        'none',
+        '13',
+        '5',
+        'TRUE',
+        'FALSE',
+      ],
+      [
+        'lunch',
+        '#77C785',
+        '',
+        '1899-12-30T11:30:00.000Z',
+        '',
+        'true',
+        'Lunch',
+        '',
+        'time-to-end',
+        'none',
+        13,
+        5,
+        'FALSE',
+        'FALSE',
+      ],
+      [
+        'MEET3',
+        '#779BE7',
+        '1899-12-30T11:30:00.000Z',
+        '',
+        90,
+        false,
+        'Meeting 3',
+        '',
+        'count-up',
+        'none',
+        '11',
+        5,
+        'TRUE',
+        'FALSE',
+      ],
+      ['MEET4', '#779BE7', '', '', 30, true, 'Meeting 4', '', 'count-up', 'none', 11, '00:05:00', 'TRUE', 'FALSE'],
+    ];
+
+    const parsedData = parseExcel(testData);
+    const { rundown } = parsedData;
+
+    // elements in bug report
+    // 15 is a number, in which case we parse it as a minutes value
+    expect((rundown.at(1) as OntimeEvent).timeWarning).toBe(15 * MILLIS_PER_MINUTE);
+
+    // in the case where a string is passed, we need to check whether it is an ISO 8601 date
+    expect((rundown.at(2) as OntimeEvent).duration).toBe(60 * MILLIS_PER_MINUTE);
+    expect((rundown.at(2) as OntimeEvent).timeDanger).toBe(5 * MILLIS_PER_MINUTE);
+
+    expect((rundown.at(3) as OntimeEvent).timeWarning).toBe(13 * MILLIS_PER_MINUTE);
+    expect((rundown.at(3) as OntimeEvent).timeDanger).toBe(5 * MILLIS_PER_MINUTE);
+
+    expect((rundown.at(4) as OntimeEvent).duration).toBe(90 * MILLIS_PER_MINUTE);
+    expect((rundown.at(4) as OntimeEvent).linkStart).toBe(false);
+    expect((rundown.at(4) as OntimeEvent).timeWarning).toBe(11 * MILLIS_PER_MINUTE);
+    expect((rundown.at(4) as OntimeEvent).timeDanger).toBe(5 * MILLIS_PER_MINUTE);
+
+    expect((rundown.at(5) as OntimeEvent).duration).toBe(30 * MILLIS_PER_MINUTE);
+
+    // if we get a boolean, we should just use that
+    expect((rundown.at(5) as OntimeEvent).linkStart).toBe(true);
+    expect((rundown.at(5) as OntimeEvent).timeWarning).toBe(11 * MILLIS_PER_MINUTE);
   });
 });

@@ -41,23 +41,16 @@ export function isStringBoolean(text: string | null) {
  * Considers custom fields
  */
 export function getPropertyValue(event: OntimeEvent | null, property: MaybeString): string | undefined {
-  if (!event) {
-    return undefined;
-  }
-  if (typeof property !== 'string') {
+  if (!event || typeof property !== 'string' || property === 'none') {
     return undefined;
   }
 
   if (property.startsWith('custom-')) {
     const field = property.split('custom-')[1];
-    return event.custom?.[field]?.value;
+    return event.custom?.[field];
   }
 
   return event[property as keyof OntimeEvent] as string;
-}
-
-export function capitaliseFirstLetter(string: string) {
-  return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
 type FormattingOptions = {
@@ -87,7 +80,9 @@ export function getFormattedTimer(
   }
 
   let display = millisToString(timeToParse);
-  display = removeLeadingZero(display);
+  if (options.removeLeadingZero) {
+    display = removeLeadingZero(display);
+  }
 
   if (options.removeSeconds) {
     display = formatDisplayWithMinutes(display, localisedMinutes);

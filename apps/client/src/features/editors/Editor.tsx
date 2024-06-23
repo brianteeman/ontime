@@ -1,6 +1,7 @@
 import { lazy, useCallback, useEffect } from 'react';
 import { IconButton, useDisclosure } from '@chakra-ui/react';
 import { IoApps } from '@react-icons/all-files/io5/IoApps';
+import { IoClose } from '@react-icons/all-files/io5/IoClose';
 import { IoSettingsOutline } from '@react-icons/all-files/io5/IoSettingsOutline';
 
 import ProductionNavigationMenu from '../../common/components/navigation-menu/ProductionNavigationMenu';
@@ -62,6 +63,15 @@ export default function Editor() {
 
   useWindowTitle('Editor');
 
+  // listen to shutdown request from electron process
+  useEffect(() => {
+    if (window.process?.type === 'renderer') {
+      window.ipcRenderer.on('user-request-shutdown', () => {
+        setLocation('shutdown');
+      });
+    }
+  }, [setLocation]);
+
   return (
     <div className={styles.mainContainer} data-testid='event-editor'>
       <ProductionNavigationMenu isMenuOpen={isMenuOpen} onMenuClose={onClose} />
@@ -75,9 +85,9 @@ export default function Editor() {
         />
         <IconButton
           aria-label='Toggle settings'
-          variant='ontime-subtle-white'
+          variant={isSettingsOpen ? 'ontime-subtle' : 'ontime-subtle-white'}
           size='lg'
-          icon={<IoSettingsOutline />}
+          icon={isSettingsOpen ? <IoClose /> : <IoSettingsOutline />}
           onClick={toggleSettings}
         />
       </EditorOverview>
